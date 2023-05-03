@@ -27,6 +27,8 @@ mid: this table will store the userID and chatID of all the phone numbers I want
 
 To use the code example showed here you need:
 
+PHP 7.4 or above
+
 Compile TDLib using instruccions from: https://tdlib.github.io/td/build.html
 
 Install (git clone) the library **tdlib-php-ffi** from https://github.com/thisismzm/tdlib-php-ffi 
