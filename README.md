@@ -20,7 +20,9 @@ Although some request to TDLib could be synchronous, I used all asyncronous requ
 I use 3 MariaDB (MySQL) tables:
 
 mo: this table will store all messages sent to me. 
+
 mt: this table will store all messages I want to send.
+
 mid: this table will store the userID and chatID of all the phone numbers I want to send messages. This table is filled dinamicaly as the program runs.
 
 To use the code example showed here you need:
