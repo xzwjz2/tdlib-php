@@ -13,19 +13,19 @@ To send messages using TDLib to a phone number you have to open a chat with that
 
 -With the chatID now you can send the message.
 
-Messages are sent from my Telegram account (the one I opened with my phone number), so previous to send an receive messages I need to authenticate. It is needed to have the Telegram application active in the phone (or the web or desktop versions) because a verification code will be sent to it.
+Messages are sent from a Telegram account (the one opened with a phone number), so previous to send an receive messages you need to authenticate. It is needed to have the Telegram application active in the phone (or the web or desktop versions) because a verification code will be sent to it.
 
-Although some request to TDLib could be synchronous, I used all asyncronous requests.
+Although some request to TDLib could be synchronous, all requests used are asyncronous.
 
-I use 3 MariaDB (MySQL) tables:
+It use 3 MariaDB (MySQL) tables:
 
-mo: this table will store all messages sent to me. 
+mo: this table will store all messages sent to you. 
 
-mt: this table will store all messages I want to send.
+mt: this table will store all messages you want to send.
 
-mid: this table will store the userID and chatID of all the phone numbers I want to send messages. This table is filled dinamicaly as the program runs.
+mid: this table will store the userID and chatID of all the phone numbers you want to send messages. This table is filled dinamicaly as the program runs.
 
-To use the code example showed here you need:
+To use the example you need:
 
 PHP 7.4 or above
 
