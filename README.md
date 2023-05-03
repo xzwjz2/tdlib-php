@@ -7,5 +7,5 @@ To use the code examples showed here you need:
 
 Compile TDLib using instruccions from: https://tdlib.github.io/td/build.html
 
-Install the library **tdlib-php-ffi** from https://github.com/thisismzm/tdlib-php-ffi
+Install (git clone) the library **tdlib-php-ffi** from https://github.com/thisismzm/tdlib-php-ffi 
 
