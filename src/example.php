@@ -1,6 +1,4 @@
 <?php
-THIS WORK IS IN PROGRESS, IF YOU TRY TO USE IT, IT'S SURE IT WILL BE VERY DIFFICULT TO UNDERSTAND IT.
-  
 /* This example implements a loop to receive and send messages */
 /* This code is thought-out to be run with cli version of php */ 
 
@@ -11,14 +9,30 @@ define('PHONENUMBER','+NNNNNNNNNN'); //my phone number in international format
 define('YO',NNNNNNNN); //Telegram ID of my account
 define('DBPATH','/var/tdlib/db'); //location of TDLib database
 define('DBFILES','/var/tdlib/files'); //Location of TDLib files
-$yo=YO; 
+$yo=YO; //this is my ID, initial setup
+
+//Open MariaDB (Mysql) Database
+mysqli_report(MYSQLI_REPORT_STRICT); 
+try{
+   $idbase = new mysqli('your DB host', 'your DB user', 'your DB pass', 'your DBase');
+   $idbase->set_charset('utf8mb4');
+}
+catch (mysqli_sql_exception $e){
+   echo 'Opening DB error: ',$e->getMessage();
+   die();
+}   
+/* This example uses 3 tables:
+mt: to store messages you send
+mo: to store messages you receive
+mid: to store phone number, chatID and userID of your contacts
+*/
 
 //Paths of modules can be different in your instalation, adjust them accordingly.
 
 require ('/opt/tdlib-php-ffi/src/TDLib.php'); //tdlib-php-ffi module
 
 try{
-   $client=new Thisismzm\TdlibPhpFfi\TDLib('/opt/td/tdlib/lib/libtdjson.so'); //this is compiled TDlib
+   $client=new Thisismzm\TdlibPhpFfi\TDLib('/opt/td/tdlib/lib/libtdjson.so'); //this is the compiled TDlib
    $cid=$client->createClientId();
    //Set verbosity log level and destiny
    $client->send($cid,json_encode(['@type'=>'setLogVerbosityLevel','new_verbosity_level'=>2]));
@@ -81,60 +95,50 @@ try{
                   }
                   break;
                case 'updateUser':
-                  //Information about user received. 
+                  //Information about user. 
                   if ($msg['user']['id']==$yo){
-                     flog(LOG,'updateUser: YO');
-                     //soy yo, no hago nada
+                     //Information about myself, nothing to do
                   }else{
-                     $log='updateUser';
-                     $log.=(isset($msg['user']['@type'])?'[@type]:'.$msg['user']['@type']:'');
-                     $log.=(isset($msg['user']['id'])?'[id]:'.$msg['user']['id']:'');
-                     $log.=(isset($msg['user']['first_name'])?'[first_name]:'.$msg['user']['first_name']:'');
-                     $log.=(isset($msg['user']['last_name'])?'[last_name]:'.$msg['user']['last_name']:'');
-                     $log.=(isset($msg['user']['username'])?'[username]:'.$msg['user']['username']:'');
-                     $log.=(isset($msg['user']['phone_number'])?'[phone_number]:'.$msg['user']['phone_number']:'');
-                     flog(LOG,$log);
-                     if (isset($msg['user']['phone_number']) and $msg['user']['phone_number']>0){
-                        //veo si lo tengo
+                     //This is information about a contact, there's a lot of information in this message including images.
+                     //I'm interested to retrieve userID and chatID to update my mid table.
+                     if (isset($msg['user']['phone_number']) and $msg['user']['phone_number']>0){ //look if I already have it in my mid table
                         $sql='select * from mid where msisdn=\''.$msg['user']['phone_number'].'\'';
-                        if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la lectura de datos',1); }
-                        if (mysqli_num_rows($result)>0){
-                           //lo tengo, me fijo si tiene los mismos datos
+                        if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error reading',1); }
+                        if (mysqli_num_rows($result)>0){ //It's in my table, compare if it's the same data
                            $row=mysqli_fetch_assoc($result);
                            mysqli_free_result($result);
                            if ($msg['user']['id']==$row['userid']){
-                              //es el mismo no hago nada
+                              //same userID, nothing to do
                            }else{
-                              //es distinto, actualizo la base y fuerzo la búsqueda del chat
-                               $sql='update mid set verif=1,userid='.$msg['user']['id'].' where msisdn=\''.$row['msisdn'].'\'';
-                              if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
+                              //different I update my table and ask TDLib to create a chat with that userID,
+                              //this is the way we have to obtain the chatID. If we had a chat with that contact in the past,
+                              //TDLib will reopen that, on the contrary, it will create a new one.
+                              //In either case, it will send an unpdate with the chatID.  
+                              $sql='update mid set verif=1,userid='.$msg['user']['id'].' where msisdn=\''.$row['msisdn'].'\'';
+                              if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error reading',1); }
                               $client->send($cid,json_encode(['@type'=>'createPrivateChat','user_id'=>$msg['user']['id'],'@extra'=>$row['msisdn']]));
-                              flog(LOG,'send createPrivateChat:'.$row['msisdn']);
                               sleep(1);
                            }
                         }else{
-                           //no lo tengo, lo agrego a la base y fuerzo búsqueda del chat
+                           //I don't have this user in my table, I append it and ask TDLib to create a chat.
                            $sql='insert into mid (msisdn,userid,verif) values (\''.$msg['user']['phone_number'].'\','.$msg['user']['id'].',1)';
-                           if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
+                           if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error reading',1); }
                            $client->send(json_encode($cid,['@type'=>'createPrivateChat','user_id'=>$msg['user']['id'],'@extra'=>$msg['user']['phone_number']]));
-                           flog(LOG,'send createPrivateChat:'.$msg['user']['phone_number']);
                            sleep(1);
                         }
-                     }elseif(isset($msg['user']['type']['@type']) and $msg['user']['type']['@type']=='userTypeDeleted'){
-                        //Se borró el usuario, fuerzo una nueva búsqueda
+                     }elseif(isset($msg['user']['type']['@type']) and $msg['user']['type']['@type']=='userTypeDeleted'){ //The contact was deleted, I update my table
                         $sql='update mid set verif=0,userid=0,chatid=0 where userid='.$msg['user']['id'];
-                        if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',2); }
                      }elseif(isset($msg['user']['phone_number']) and $msg['user']['phone_number']==''){
-                        //Usuario con teléfono oculto no hago nada
+                        //The phone number of the contact is hidden, nothing to do
                      }else{
-                        flog(LOG,'NO IDENTIFICADO: '.print_r($msg,true));
+                        //Not identified message, you can log it to analyze later 
                      }
                   }
                   break;
                case 'updateNewMessage':
-                  flog(LOG,'updateNewMessage');
-                  if ($msg['message']['sender_id']['user_id']!=$yo){
-                     //mensaje recibido
+                  //This is an update of a new message
+                  if ($msg['message']['sender_id']['user_id']!=$yo){ //this is a message a contact sent to me, I store it in mo table.                     
+                     //in this example I do a minimum process of data, but the message can have images or files appended, you can recover them and do something
                      if (isset($msg['message']['content'])){
                         switch ($msg['message']['content']['@type']){
                            case 'text':
@@ -150,7 +154,6 @@ try{
                               if (isset($msg['message']['content']['sticker']['emoji'])){
                                  $mensaje=$msg['message']['content']['sticker']['emoji'];
                               }else{
-                                 flog(LOG,print_r($msg,true));
                                  $mensaje='TIPO MENSAJE:'.$msg['message']['content']['@type'];
                               }
                               break;
@@ -158,115 +161,105 @@ try{
                               $mensaje='TIPO MENSAJE:'.$msg['message']['content']['@type'];
                               break;
                            default:
-                              flog(LOG,print_r($msg,true));
                               $mensaje='TIPO MENSAJE:'.$msg['message']['content']['@type'];
                               break;
                         }
                         $sql='insert into mo (userid,chatid,msgid,mensaje,fchrec) values ('.$msg['message']['sender_id']['user_id'].','.$msg['message']['chat_id'].','.$msg['message']['id'].',\''.mysqli_real_escape_string($idbase,$mensaje).'\',\''.date('Y-m-d H:i:s',$msg['message']['date']).'\')';
-                        if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
+                        if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                      }else{
-                        flog(LOG,'NO IDENTIFICADO: '.print_r($msg,true));
+                        //Not identified message, you can log it to analyze later
                      }   
                   }else{
-                     //mensaje enviado
-                     //Por ahora no hago nada porque no tengo forma de relacionar unívocamente 
-                     //flog(LOG,'MENSAJE ENVIADO: '.print_r($msg,true));
+                     //This is a message I sent, nothing to do
                   }
                   break;
                case 'message':
-                  flog(LOG,'message');
-                  if ($msg['sender_id']['user_id']==$yo){
-                     //mensaje enviado
+                  //Information of a message
+                  if ($msg['sender_id']['user_id']==$yo){ //This is a message I sent, I update my mt table with status 3: message was sent
                      $sql='update mt set estado=3,fchenv=\''.date('Y-m-d H:i:s',$msg['date']).'\',msgid='.$msg['id'].' where idmt='.$msg['@extra'];
-                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
+                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                   }else{
-                     flog(LOG,'NO IDENTIFICADO: '.print_r($msg,true));
+                     //Not identified message, you can log it to analyze later
                   }
                   break;
                case 'updateMessageSendSucceeded':
-                  flog(LOG,'updateMessageSendSucceeded');
-                  if ($msg['message']['sender_id']['user_id']==$yo){
-                     //mensaje enviado
+                  //This update indicates message reached destiny
+                  if ($msg['message']['sender_id']['user_id']==$yo){ //This is the message I sent, update my mt table with status 4
                      $sql='update mt set estado=4,fchent=\''.date('Y-m-d H:i:s',$msg['message']['date']).'\',msgid='.$msg['message']['id'].',coderr=\'\' where chatid='.$msg['message']['chat_id'].' and msgid='.$msg['old_message_id'];
-                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
+                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                   }else{
-                     flog(LOG,'NO IDENTIFICADO: '.print_r($msg,true));
+                     //Not identified message, you can log it to analyze later
                   }
                   break;
                case 'updateMessageSendFailed':
-                  flog(LOG,'updateMessageSendFailed');
-                  if ($msg['message']['sender_id']['user_id']==$yo){
-                     //mensaje enviado
+                  //Sending of message failed,
+                  if ($msg['message']['sender_id']['user_id']==$yo){ //This is the message I sent, update my mt table with status 2
                      $sql='update mt set estado=2,fchpro=\''.date('Y-m-d H:i:s',$msg['message']['date']).'\',msgid='.$msg['message']['id'].',coderr=\''.$msg['error_code'].'-'.$msg['error_message'].'\' where chatid='.$msg['message']['chat_id'].' and msgid='.$msg['old_message_id'];
-                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
+                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                   }else{
-                     flog(LOG,'NO IDENTIFICADO: '.print_r($msg,true));
+                     //Not identified message, you can log it to analyze later
                   }
                   break;
                case 'updateChatReadOutbox':
-                  flog(LOG,'updateChatReadOutbox');
+                  //This update indicates contact readed message
                   $sql='update mt set estado=5,fchlei=\''.date('Y-m-d H:i:s').'\' where chatid='.$msg['chat_id'].' and msgid='.$msg['last_read_outbox_message_id'];
-                  if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
+                  if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                   break;
                case 'chat':
-                  flog(LOG,'chat');
-                  //flog(LOG,print_r($msg,true));
+                  //This is the update with the chatID I was waiting
                   $sql='update mid set chatid='.$msg['id'].',verif=2 where msisdn=\''.$msg['@extra'].'\'';
-                  if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
-                  //reactivo los que hayan quedado pendientes
+                  if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
+                  //reactivate records in mt table they were previously put in pending state
                   $sql='update mt set estado=0 where estado=1 and msisdn=\''.$msg['@extra'].'\'';
-                  if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
+                  if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                   break;
                case 'importedContacts':
-                  flog(LOG,'importedContacts');
+                  //This is an update of the import contact I sent before
                   if ($msg['user_ids'][0]==0){
-                     //no existe el contacto, no sigo buscando
+                     //The phone number I requested has no Telegram account, I update my mid table
                      $sql='update mid set userid=0,chatid=0,verif=2 where msisdn=\''.$msg['@extra'].'\'';
-                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
-                     //actualizo todos los MT pendientes
+                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
+                     //update all records in mt table they were previously put in pending state
                      $sql='update mt set estado=2,coderr=\'0-No existe contacto\',fchpro=\''.date('Y-m-d H:i:s').'\' where estado=1 and msisdn=\''.$msg['@extra'].'\'';
-                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
+                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                   }else{
-                     //Actualizo el contacto
+                     //The phone number I requested has a Telegram account, I update my mid table with userID
                      $sql='update mid set userid='.$msg['user_ids'][0].' where msisdn=\''.$msg['@extra'].'\'';
-                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
-                     //Lanzo la búsqueda del chat
+                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
+                     //I request TDLib to create or reopen a chat
                      $client->send($cid,json_encode(['@type'=>'createPrivateChat','user_id'=>$msg['user_ids'][0],'@extra'=>$msg['@extra']]));
-                     flog(LOG,'send createPrivateChat');
                      sleep(1);
                   }   
                   break;
-               case 'error':
+               case 'error': //TDLib can sent error messages
                   if ($msg['code']==429 and substr($msg['message'],0,17)=='Too Many Requests'){
-                     flog(LOG,'error: 429-'.$msg['message'].':'.$msg['@extra']);
+                     //This error usually indicates the phone number I tried to contact has no Telegram account, I update my mid table
                      $sql='update mid set userid=0,chatid=0,verif=3 where msisdn=\''.$msg['@extra'].'\'';
-                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
-                     //actualizo todos los pendientes
+                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
+                     //update all records in mt table they were previously put in pending state 
                      $sql='update mt set estado=2,coderr=\'0-Error en contacto\',fchpro=\''.date('Y-m-d H:i:s').'\' where estado=1 and msisdn=\''.$msg['@extra'].'\'';
-                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
+                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                   }elseif($msg['code']==400 and $msg['message']=='Chat not found'){
-                     flog(LOG,'error: 400-chat not found:'.$msg['@extra']);
-                     //El chat ha cambiado, lanzo búsqueda de nuevo chat
+                     //chatID of the contact has changed (from what I have registered in the past), I recover the phone number to ask TDLib again to create a chat
                      $sql='select msisdn from mt where idmt='.$msg['@extra'];
-                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la lectura de datos',1); }
+                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error reading',1); }
                      $row=mysqli_fetch_assoc($result);
                      mysqli_free_result($result);
-                     $sql='update mt set estado=1 where idmt='.$msg['@extra'];
-                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
-                     $sql='select userid from mid where msisdn=\''.$row['msisdn'].'\'';
-                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la lectura de datos',1); }
+                     $sql='update mt set estado=1 where idmt='.$msg['@extra']; //put all registers in mt table in pending state
+                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
+                     $sql='select userid from mid where msisdn=\''.$row['msisdn'].'\''; //recover userID 
+                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error reading',1); }
                      $usu=mysqli_fetch_assoc($result);
                      mysqli_free_result($result);
-                     $sql='update mid set verif=1 where msisdn=\''.$row['msisdn'].'\'';
-                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
-                     //
-                     $client->send($cid,json_encode(['@type'=>'createPrivateChat','user_id'=>$usu['userid'],'@extra'=>$row['msisdn']]));
-                     flog(LOG,'send createPrivateChat:'.$row['msisdn']);
+                     $sql='update mid set verif=1 where msisdn=\''.$row['msisdn'].'\''; //put record in mid table in pending state
+                     if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
+                     $client->send($cid,json_encode(['@type'=>'createPrivateChat','user_id'=>$usu['userid'],'@extra'=>$row['msisdn']])); //ask TDLib
                      sleep(1);
                   }else{
-                     flog(LOG,'NO IDENTIFICADO: '.print_r($msg,true));
+                     //Not identified message, you can log it to analyze later
                   }
                   break;
+               //The following types of updates have no usage on this example, I do nothing with them
                case 'authorizationStateWaitTdlibParameters':
                case 'ok':   
                case 'updateSuggestedActions':
@@ -298,83 +291,69 @@ try{
                case 'updateDiceEmojis':
                case 'updateActiveEmojiReactions':
                case 'updateChatFolders':
-                  flog(LOG,$msg['@type']);
                   break;
                default:
-                  flog(LOG,'NO IDENTIFICADO: '.print_r($msg,true));
+                  //Not identified message, you can log it to analyze later
             }
          }else{
-            flog(LOG,'NO IDENTIFICADO: '.print_r($msg,true));
+            //Not identified message, you can log it to analyze later
          }
-      }else{
-         //No hay para recibir, me fijo si hay para mandar
+      }else{ //There's nothing received, I look for in the mt table if I have a new record to send.
          $sql='select mt.idmt,mt.mensaje,mt.msisdn,mid.userid,mid.chatid,mid.verif from mt left join mid on mt.msisdn=mid.msisdn where mt.estado=0 order by mt.idmt limit 1';
-         if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la lectura de datos',1); }
-         if (mysqli_num_rows($result)==1){
+         if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error reading',1); }
+         if (mysqli_num_rows($result)==1){ //There's something to send
             $row=mysqli_fetch_assoc($result);
             mysqli_free_result($result);
-            if (is_null($row['verif'])){
-               //Es uno nuevo, no tengo el maestro, lo pongo como pendiente
+            if (is_null($row['verif'])){ //I don't have the phone number in mid table (this is the first time I send a message to this contact), put the record in pending state
                $sql='update mt set estado=1,fchpro=\''.date('Y-m-d H:i:s').'\' where idmt='.$row['idmt'];
-               if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
-               //agrego el registro al maestro
+               if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
+               //append a record to mid table 
                $sql='insert into mid (msisdn,verif) values (\''.$row['msisdn'].'\',0)';
-               if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
-            }else{
-               if ($row['userid']>0 and $row['chatid']>0){
-                  //Tengo usuario y chat, envío el mensaje
+               if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
+            }else{ //I have a record in mid table
+               if ($row['userid']>0 and $row['chatid']>0){ //I have a userID and chatID of this contact I send the message
                   $sql='update mt set estado=3,fchpro=\''.date('Y-m-d H:i:s').'\',fchenv=\''.date('Y-m-d H:i:s').'\',userid='.$row['userid'].',chatid='.$row['chatid'].' where idmt='.$row['idmt'];
                   if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
                   $acc=json_encode(['@type'=>'sendMessage','chat_id'=>$row['chatid'],'message_thread_id'=>0,'reply_to_message_id'=>0,'input_message_content'=>array('@type'=>'inputMessageText','text'=>['@type'=>'formatedText','text'=>$row['mensaje']]),'@extra'=>$row['idmt']]);
                   $client->send($cid,$acc);
-                  flog(LOG,'send sendMessage:'.$row['idmt']);
                   sleep(1);
-               }elseif ($row['verif']==2){
-                  //Está verificado y no tiene usuario ni chat, lo pongo como pendiente y fuerzo verificación del contacto
+               }elseif ($row['verif']==2){ //I have a record in mid table but in the past the contact didn't have a Telegram account
+                  //I put the mt record in pending state and I will ask TLDlib again about the contact
                   $sql='update mt set estado=1,fchpro=\''.date('Y-m-d H:i:s').'\',coderr=\'0-No existe contacto\' where idmt='.$row['idmt'];
-                  if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
+                  if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                   $sql='update mid set verif=0 where msisdn=\''.$row['msisdn'].'\'';
-                  if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
-               }elseif ($row['verif']==3){
-                  //Está verificado en estado 3 (too many requests), lo marco como error
+                  if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
+               }elseif ($row['verif']==3){ //Last verification of the contact TLDlib responded with error 429, I mark mt record with error
                   $sql='update mt set estado=2,coderr=\'0-Error en contacto\',fchpro=\''.date('Y-m-d H:i:s').'\' where idmt='.$row['idmt'];
-                  if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
-               }elseif ($row['verif']>3){
-                  //Usuario en lista de exclusión u otro motivo
+                  if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
+               }elseif ($row['verif']>3){ //In case we decided to exclude this contact for any reason
                   $sql='update mt set estado=2,coderr=\'0-Usuario bloqueado\',fchpro=\''.date('Y-m-d H:i:s').'\' where idmt='.$row['idmt'];
-                  if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
-               }else{
-                  //Está en proceso de verificación, lo pongo como pendiente
+                  if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
+               }else{ //I'm waiting for TDLib to complete chat creation, I put the mt record in pending state
                   $sql='update mt set estado=1,fchpro=\''.date('Y-m-d H:i:s').'\' where idmt='.$row['idmt'];
-                  if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
+                  if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                }
             }
-         }elseif ((time()-$tempo)>$intervalo){
-            //veo si hay registros para actualizar
+         }else{
+            //In this part, I look for in mid table if we have a phone numbers of a contact that is pending to update, that means I don't have the userID nor the chatID
+            //To obtain that information, the first step is to request TDLib to import a contact
             $sql='select * from mid where verif=0 order by fchver limit 1';
-            if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la lectura de datos',1); }
+            if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error reading',1); }
             if (mysqli_num_rows($result)==1){
                $row=mysqli_fetch_assoc($result);
                mysqli_free_result($result);
                $client->send($cid,json_encode(['@type'=>'importContacts','contacts'=>[['@type'=>'contact','phone_number'=>'+'.$row['msisdn'],'user_id'=>0]],'@extra'=>$row['msisdn']]));
-               flog(LOG,'send importContacts:'.$row['msisdn']);
                sleep(1);
-               $sql='update mid set verif=1 where msisdn=\''.$row['msisdn'].'\'';
+               $sql='update mid set verif=1 where msisdn=\''.$row['msisdn'].'\''; //mark mid record in pending state
                if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
-               $tempo=time();
-            }
-         }else{
+             }
+         }else{ //nothing to receive, nothing to send, make a pause to not overload.
             sleep(1);
          }
       }
    }
 }
 catch (\Exception $e) {
-   flog(LOGERROR,$e->getMessage());
-   if (isset($sql)){flog(LOGERROR,$sql);}
-   if (isset($acc)){flog(LOGERROR,$acc);}
-   if (isset($msg)){flog(LOGERROR,print_r($msg,true));}
+   echo 'Error: ',$e->getMessage();
 }
-
-(this work is in progress)
-
+?>
