@@ -1,7 +1,7 @@
 # tdlib-php
 Use Telegram TDLib from PHP
 
-*Esta es mi humilde contribución al uso de Telegram desde PHP, después de haber pasado horas de prueba y error, ante la falta de ejemplos de uso.*
+*Esta es mi humilde contribución al uso de Telegram desde PHP, después de haber pasado horas de prueba y error, ante la falta de ejemplos de uso en las páginas oficiales.*
 
 This example is a very simple gateway to send an recieve messages with Telegram. I wrote it because I had the need to send messages programaticaly to a list of users I only know their phone numbers.
 
