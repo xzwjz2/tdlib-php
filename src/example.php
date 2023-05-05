@@ -1,15 +1,17 @@
 <?php
-/* This example implements a loop to receive and send messages */
-/* This code is thought-out to be run with cli version of php */ 
+/* This example implements a gateway to send and receive messages */
+/* In essence is a continuous loop, first ask TDLib for messages received (includes status and other updates)
+   and then looks for in a table if there are messages to send */
+/* This code is thought-out to be run as daemon or background process with cli version of php */ 
 
 //Initial Setup
 define('APIID',NNNNNNN); //api_id — Application identifier for accessing the Telegram API, which can be obtained at https://my.telegram.org
 define('APIHASH','XXXXXXXXX'); //api_hash — Hash of the Application identifier for accessing the Telegram API, which can be obtained at https://my.telegram.org
-define('PHONENUMBER','+NNNNNNNNNN'); //my phone number in international format
-define('YO',NNNNNNNN); //Telegram ID of my account
+define('PHONENUMBER','+NNNNNNNNNN'); //phone number of the Telegram account you're going to use for the gateway, in international format
+define('YO',NNNNNNNN); //ID of the account
 define('DBPATH','/var/tdlib/db'); //location of TDLib database
 define('DBFILES','/var/tdlib/files'); //Location of TDLib files
-$yo=YO; //this is my ID, initial setup
+$yo=YO;
 
 //Open MariaDB (Mysql) Database
 mysqli_report(MYSQLI_REPORT_STRICT); 
@@ -48,10 +50,12 @@ try{
          if (isset($msg['@type'])){
             switch ($msg['@type']){ //analyze what type of message or update is
                case 'updateOption':
-                  //Receive different parameters of present configuration
+                  //Receive different parameters of present configuration, you can store them in your database or do something with them
+                  //The only one it's used here is "my_id" which is the value of the account ID and serves to identify messages that are
+                  //sent to me from those sent by me.
                   if (isset($msg['name'])){
                      switch($msg['name']){
-                        case 'my_id': $yo=$msg['value']['value']; break; //my account ID, is needed to identify messages sent by me
+                        case 'my_id': $yo=$msg['value']['value']; break; //the account ID
                         case 'authentication_token': $authtoken=$msg['value']['value']; break;
                         case 'unix_time': $acttime=date('Y-m-d H:i:s',$msg['value']['value'])); break;
                      }
@@ -73,7 +77,7 @@ try{
                         break;
                      case 'authorizationStateWaitCode':
                         /* Now is time to validate the code recieved in the phone. You can imagine and implement some trick to provide the validation code 
-                        and keep the loop running, but in this example my solution is to exit the loop and run again with the validation code passed as a 
+                        while you keep the loop running, but in this example my solution is to exit the loop and run again with the validation code passed as a 
                         command line parameter */
                         if ($argc><2){ //no parameter provided, means this is the first time run, exit the loop (remember that the first parameter is the application name, 
                                        //that's why I ask for 2 or more parameters).
@@ -97,20 +101,20 @@ try{
                case 'updateUser':
                   //Information about user. 
                   if ($msg['user']['id']==$yo){
-                     //Information about myself, nothing to do
+                     //Information about self, nothing to do
                   }else{
                      //This is information about a contact, there's a lot of information in this message including images.
-                     //I'm interested to retrieve userID and chatID to update my mid table.
-                     if (isset($msg['user']['phone_number']) and $msg['user']['phone_number']>0){ //look if I already have it in my mid table
+                     //Only interested in userID and chatID to update mid table.
+                     if (isset($msg['user']['phone_number']) and $msg['user']['phone_number']>0){ //look for if it's already in mid table
                         $sql='select * from mid where msisdn=\''.$msg['user']['phone_number'].'\'';
                         if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error reading',1); }
-                        if (mysqli_num_rows($result)>0){ //It's in my table, compare if it's the same data
+                        if (mysqli_num_rows($result)>0){ //It's in mid table, compare if it's the same data
                            $row=mysqli_fetch_assoc($result);
                            mysqli_free_result($result);
                            if ($msg['user']['id']==$row['userid']){
                               //same userID, nothing to do
                            }else{
-                              //different I update my table and ask TDLib to create a chat with that userID,
+                              //different, update mid table and ask TDLib to create a chat with that userID,
                               //this is the way we have to obtain the chatID. If we had a chat with that contact in the past,
                               //TDLib will reopen that, on the contrary, it will create a new one.
                               //In either case, it will send an unpdate with the chatID.  
@@ -120,13 +124,13 @@ try{
                               sleep(1);
                            }
                         }else{
-                           //I don't have this user in my table, I append it and ask TDLib to create a chat.
+                           //We don't have this user in mid table, append it and ask TDLib to create a chat.
                            $sql='insert into mid (msisdn,userid,verif) values (\''.$msg['user']['phone_number'].'\','.$msg['user']['id'].',1)';
                            if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error reading',1); }
                            $client->send(json_encode($cid,['@type'=>'createPrivateChat','user_id'=>$msg['user']['id'],'@extra'=>$msg['user']['phone_number']]));
                            sleep(1);
                         }
-                     }elseif(isset($msg['user']['type']['@type']) and $msg['user']['type']['@type']=='userTypeDeleted'){ //The contact was deleted, I update my table
+                     }elseif(isset($msg['user']['type']['@type']) and $msg['user']['type']['@type']=='userTypeDeleted'){ //The contact was deleted, update mid table
                         $sql='update mid set verif=0,userid=0,chatid=0 where userid='.$msg['user']['id'];
                      }elseif(isset($msg['user']['phone_number']) and $msg['user']['phone_number']==''){
                         //The phone number of the contact is hidden, nothing to do
@@ -175,7 +179,7 @@ try{
                   break;
                case 'message':
                   //Information of a message
-                  if ($msg['sender_id']['user_id']==$yo){ //This is a message I sent, I update my mt table with status 3: message was sent
+                  if ($msg['sender_id']['user_id']==$yo){ //This is a message I sent, update mt table with status 3: message was sent
                      $sql='update mt set estado=3,fchenv=\''.date('Y-m-d H:i:s',$msg['date']).'\',msgid='.$msg['id'].' where idmt='.$msg['@extra'];
                      if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                   }else{
@@ -184,7 +188,7 @@ try{
                   break;
                case 'updateMessageSendSucceeded':
                   //This update indicates message reached destiny
-                  if ($msg['message']['sender_id']['user_id']==$yo){ //This is the message I sent, update my mt table with status 4
+                  if ($msg['message']['sender_id']['user_id']==$yo){ //This is the message I sent, update mt table with status 4
                      $sql='update mt set estado=4,fchent=\''.date('Y-m-d H:i:s',$msg['message']['date']).'\',msgid='.$msg['message']['id'].',coderr=\'\' where chatid='.$msg['message']['chat_id'].' and msgid='.$msg['old_message_id'];
                      if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                   }else{
@@ -193,7 +197,7 @@ try{
                   break;
                case 'updateMessageSendFailed':
                   //Sending of message failed,
-                  if ($msg['message']['sender_id']['user_id']==$yo){ //This is the message I sent, update my mt table with status 2
+                  if ($msg['message']['sender_id']['user_id']==$yo){ //This is the message I sent, update mt table with status 2
                      $sql='update mt set estado=2,fchpro=\''.date('Y-m-d H:i:s',$msg['message']['date']).'\',msgid='.$msg['message']['id'].',coderr=\''.$msg['error_code'].'-'.$msg['error_message'].'\' where chatid='.$msg['message']['chat_id'].' and msgid='.$msg['old_message_id'];
                      if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                   }else{
@@ -216,14 +220,14 @@ try{
                case 'importedContacts':
                   //This is an update of the import contact I sent before
                   if ($msg['user_ids'][0]==0){
-                     //The phone number I requested has no Telegram account, I update my mid table
+                     //The phone number requested has no Telegram account, update mid table
                      $sql='update mid set userid=0,chatid=0,verif=2 where msisdn=\''.$msg['@extra'].'\'';
                      if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
-                     //update all records in mt table they were previously put in pending state
+                     //update all records in mt table that were previously put in pending state
                      $sql='update mt set estado=2,coderr=\'0-No existe contacto\',fchpro=\''.date('Y-m-d H:i:s').'\' where estado=1 and msisdn=\''.$msg['@extra'].'\'';
                      if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                   }else{
-                     //The phone number I requested has a Telegram account, I update my mid table with userID
+                     //The phone number requested has a Telegram account, update mid table with userID
                      $sql='update mid set userid='.$msg['user_ids'][0].' where msisdn=\''.$msg['@extra'].'\'';
                      if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                      //I request TDLib to create or reopen a chat
@@ -233,7 +237,7 @@ try{
                   break;
                case 'error': //TDLib can sent error messages
                   if ($msg['code']==429 and substr($msg['message'],0,17)=='Too Many Requests'){
-                     //This error usually indicates the phone number I tried to contact has no Telegram account, I update my mid table
+                     //This error usually indicates the phone number I tried to contact has no Telegram account, update mid table
                      $sql='update mid set userid=0,chatid=0,verif=3 where msisdn=\''.$msg['@extra'].'\'';
                      if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                      //update all records in mt table they were previously put in pending state 
@@ -335,7 +339,7 @@ try{
                }
             }
          }else{
-            //In this part, I look for in mid table if we have a phone numbers of a contact that is pending to update, that means I don't have the userID nor the chatID
+            //In this part, I look for in mid table if we have a phone number of a contact that is pending to update, that means I don't have the userID nor the chatID
             //To obtain that information, the first step is to request TDLib to import a contact
             $sql='select * from mid where verif=0 order by fchver limit 1';
             if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error reading',1); }
@@ -345,7 +349,7 @@ try{
                $client->send($cid,json_encode(['@type'=>'importContacts','contacts'=>[['@type'=>'contact','phone_number'=>'+'.$row['msisdn'],'user_id'=>0]],'@extra'=>$row['msisdn']]));
                sleep(1);
                $sql='update mid set verif=1 where msisdn=\''.$row['msisdn'].'\''; //mark mid record in pending state
-               if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error en la escritura de datos',1); }
+               if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
              }
          }else{ //nothing to receive, nothing to send, make a pause to not overload.
             sleep(1);
