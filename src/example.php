@@ -8,10 +8,10 @@
 define('APIID',NNNNNNN); //api_id — Application identifier for accessing the Telegram API, which can be obtained at https://my.telegram.org
 define('APIHASH','XXXXXXXXX'); //api_hash — Hash of the Application identifier for accessing the Telegram API, which can be obtained at https://my.telegram.org
 define('PHONENUMBER','+NNNNNNNNNN'); //phone number of the Telegram account you're going to use for the gateway, in international format
-define('YO',NNNNNNNN); //ID of the account
+define('ACCID',NNNNNNNN); //ID of the account
 define('DBPATH','/var/tdlib/db'); //location of TDLib database
 define('DBFILES','/var/tdlib/files'); //Location of TDLib files
-$yo=YO;
+$acc_id=ACCID;
 
 //Open MariaDB (Mysql) Database
 mysqli_report(MYSQLI_REPORT_STRICT); 
@@ -55,7 +55,7 @@ try{
                   //sent to me from those sent by me.
                   if (isset($msg['name'])){
                      switch($msg['name']){
-                        case 'my_id': $yo=$msg['value']['value']; break; //the account ID
+                        case 'my_id': $acc_id=$msg['value']['value']; break; //the account ID
                         case 'authentication_token': $authtoken=$msg['value']['value']; break;
                         case 'unix_time': $acttime=date('Y-m-d H:i:s',$msg['value']['value'])); break;
                      }
@@ -100,7 +100,7 @@ try{
                   break;
                case 'updateUser':
                   //Information about user. 
-                  if ($msg['user']['id']==$yo){
+                  if ($msg['user']['id']==$acc_id){
                      //Information about self, nothing to do
                   }else{
                      //This is information about a contact, there's a lot of information in this message including images.
@@ -141,7 +141,7 @@ try{
                   break;
                case 'updateNewMessage':
                   //This is an update of a new message
-                  if ($msg['message']['sender_id']['user_id']!=$yo){ //this is a message a contact sent to me, I store it in mo table.                     
+                  if ($msg['message']['sender_id']['user_id']!=$acc_id){ //this is a message a contact sent to me, I store it in mo table.                     
                      //in this example I do a minimum process of data, but the message can have images or files appended, you can recover them and do something
                      if (isset($msg['message']['content'])){
                         switch ($msg['message']['content']['@type']){
@@ -179,7 +179,7 @@ try{
                   break;
                case 'message':
                   //Information of a message
-                  if ($msg['sender_id']['user_id']==$yo){ //This is a message I sent, update mt table with status 3: message was sent
+                  if ($msg['sender_id']['user_id']==$acc_id){ //This is a message I sent, update mt table with status 3: message was sent
                      $sql='update mt set estado=3,fchenv=\''.date('Y-m-d H:i:s',$msg['date']).'\',msgid='.$msg['id'].' where idmt='.$msg['@extra'];
                      if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                   }else{
@@ -188,7 +188,7 @@ try{
                   break;
                case 'updateMessageSendSucceeded':
                   //This update indicates message reached destiny
-                  if ($msg['message']['sender_id']['user_id']==$yo){ //This is the message I sent, update mt table with status 4
+                  if ($msg['message']['sender_id']['user_id']==$acc_id){ //This is the message I sent, update mt table with status 4
                      $sql='update mt set estado=4,fchent=\''.date('Y-m-d H:i:s',$msg['message']['date']).'\',msgid='.$msg['message']['id'].',coderr=\'\' where chatid='.$msg['message']['chat_id'].' and msgid='.$msg['old_message_id'];
                      if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                   }else{
@@ -197,7 +197,7 @@ try{
                   break;
                case 'updateMessageSendFailed':
                   //Sending of message failed,
-                  if ($msg['message']['sender_id']['user_id']==$yo){ //This is the message I sent, update mt table with status 2
+                  if ($msg['message']['sender_id']['user_id']==$acc_id){ //This is the message I sent, update mt table with status 2
                      $sql='update mt set estado=2,fchpro=\''.date('Y-m-d H:i:s',$msg['message']['date']).'\',msgid='.$msg['message']['id'].',coderr=\''.$msg['error_code'].'-'.$msg['error_message'].'\' where chatid='.$msg['message']['chat_id'].' and msgid='.$msg['old_message_id'];
                      if (!$result=mysqli_query($idbase,$sql)){ throw new Exception ('Error writing',1); }
                   }else{
