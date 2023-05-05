@@ -55,7 +55,7 @@ try{
                   //sent to me from those sent by me.
                   if (isset($msg['name'])){
                      switch($msg['name']){
-                        case 'my_id': $acc_id=$msg['value']['value']; break; //the account ID
+                        case 'my_id': $acc_id=$msg['value']['value']; break; //the account ID, you can print or log this value to configure later
                         case 'authentication_token': $authtoken=$msg['value']['value']; break;
                         case 'unix_time': $acttime=date('Y-m-d H:i:s',$msg['value']['value'])); break;
                      }
