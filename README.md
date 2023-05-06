@@ -17,13 +17,13 @@ Messages are sent from a Telegram account (the one opened with a phone number), 
 
 Although some request to TDLib could be synchronous, all requests used are asyncronous.
 
-It use 3 MariaDB (MySQL) tables:
+It uses 3 MariaDB (MySQL) tables:
 
-mo: this table will store all messages sent to you. 
+**mo**: this table will store all messages sent to you. 
 
-mt: this table will store all messages you want to send.
+**mt**: this table will store all messages you want to send.
 
-mid: this table will store the userID and chatID of all the phone numbers you want to send messages. This table is filled dinamicaly as the program runs.
+**mid**: this table will store the userID and chatID of all the phone numbers you want to send messages. This table is filled dinamicaly as the program runs.
 
 ## Instalation
 
@@ -47,7 +47,7 @@ Run the program on the console in the foreground:
 ```
 php -f example.php
 ```
-This first time the program will request authorization to TDLib, and TDLib will generate a code that will be sent by a Telegram message to the phone number configured (you need a phone with the app running, or the desktop version running) and stop itself. 
+This first time the program will request authorization to TDLib, and TDLib will generate a code that will be sent by a Telegram message to the phone number configured (you need a phone with the app running, or the desktop version running) and stops itself. 
 
 Now, run the program with that code:
 ```
@@ -59,7 +59,7 @@ nohup php -f example.php >/dev/null 2>&1 &
 ```
 Unless you stop it or an error occurs, the program will run indefinitely. 
 
-You can read mo table to see messages received or write on mt table to send messages.
+You can read **mo** table to see messages received or write on **mt** table to send messages.
 
 
 
