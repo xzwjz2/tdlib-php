@@ -33,3 +33,22 @@ Compile TDLib using instruccions from: https://tdlib.github.io/td/build.html
 
 Install (git clone) the library **tdlib-php-ffi** from https://github.com/thisismzm/tdlib-php-ffi 
 
+Install (git clone) tdlib-php
+
+#Use it:
+
+First you have to configure example.php with 4 parameters: api_id, api_hash, phone number and account ID.
+
+You get api_id and api_hash at https://my.telegram.org, and phone number is the MSISDN of the line you are going to use for this application. Account ID can be configured later. In this instance you can put any numeric value. The exact value will be delivered by TDLib when it sends updates. You can add extra instructions to line 58 of the code to get the value or can increase verbosity level in line 40.
+
+Run the program on the console in the foreground:
+```
+php -f example.php
+```
+
+
+
+
+
+
+
