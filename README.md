@@ -29,6 +29,8 @@ mid: this table will store the userID and chatID of all the phone numbers you wa
 
 Install PHP 7.4 or above.
 
+Install MariaDB or MySQL.
+
 Compile TDLib using instruccions from: https://tdlib.github.io/td/build.html
 
 Install (git clone) the library **tdlib-php-ffi** from https://github.com/thisismzm/tdlib-php-ffi 
@@ -37,7 +39,7 @@ Install (git clone) this package.
 
 ## How to use it
 
-First you have to configure example.php, lines 8 to 13 in the code. 
+First you have to create tables with **tables.sql** and configure **example.php**, lines 8 to 13 in the code. 
 
 You get **api_id** and **api_hash** at https://my.telegram.org, and **phone number** is the MSISDN of the line you are going to use for this application. **Account ID** can be configured later. In this instance you can put any numeric value. The exact value will be delivered by TDLib when it sends updates. You can add extra instructions to line 58 of the code to get the value or you can increase verbosity level in line 40.
 
