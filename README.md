@@ -37,14 +37,30 @@ Install (git clone) tdlib-php
 
 #Use it:
 
-First you have to configure example.php with 4 parameters: api_id, api_hash, phone number and account ID.
+First you have to configure example.php, lines 8 to 13 in the code. 
 
-You get api_id and api_hash at https://my.telegram.org, and phone number is the MSISDN of the line you are going to use for this application. Account ID can be configured later. In this instance you can put any numeric value. The exact value will be delivered by TDLib when it sends updates. You can add extra instructions to line 58 of the code to get the value or can increase verbosity level in line 40.
+You get **api_id** and **api_hash** at https://my.telegram.org, and **phone number** is the MSISDN of the line you are going to use for this application. **Account ID** can be configured later. In this instance you can put any numeric value. The exact value will be delivered by TDLib when it sends updates. You can add extra instructions to line 58 of the code to get the value or you can increase verbosity level in line 40.
 
 Run the program on the console in the foreground:
 ```
 php -f example.php
 ```
+This first time the program will request authorization to TDLib, and TDLib will generate a code that will be sent by a Telegram message to the phone number configured (you need a phone with the app running, or the desktop version running). 
+
+Now, you run the program with that code:
+```
+php -f example.php <code>
+```
+You should receive in the phone or desktop app a second message telling that a new session was opened. At this time, you also got the Account ID. You can stop execution, configure that value and run, this time in the background.
+```
+nohup php -f example.php >/dev/null 2>&1 &
+```
+Unless you stop it or an error occurs, the program will run indefinitely. 
+
+You can read mo table to see messages received or write on mt table to send messages.
+
+
+
 
 
 
