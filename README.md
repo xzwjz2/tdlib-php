@@ -25,17 +25,17 @@ mt: this table will store all messages you want to send.
 
 mid: this table will store the userID and chatID of all the phone numbers you want to send messages. This table is filled dinamicaly as the program runs.
 
-To use the example you need:
+## Instalation
 
-PHP 7.4 or above
+Install PHP 7.4 or above.
 
 Compile TDLib using instruccions from: https://tdlib.github.io/td/build.html
 
 Install (git clone) the library **tdlib-php-ffi** from https://github.com/thisismzm/tdlib-php-ffi 
 
-Install (git clone) tdlib-php
+Install (git clone) this package. 
 
-#Use it:
+## How to use it
 
 First you have to configure example.php, lines 8 to 13 in the code. 
 
