@@ -47,7 +47,7 @@ Run the program on the console in the foreground:
 ```
 php -f example.php
 ```
-This first time the program will request authorization to TDLib, and TDLib will generate a code that will be sent by a Telegram message to the phone number configured (you need a phone with the app running, or the desktop version running). 
+This first time the program will request authorization to TDLib, and TDLib will generate a code that will be sent by a Telegram message to the phone number configured (you need a phone with the app running, or the desktop version running) and stop itself. 
 
 Now, you run the program with that code:
 ```
